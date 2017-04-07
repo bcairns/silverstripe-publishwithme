@@ -5,6 +5,7 @@ Lets imagine that you have a staff profiles page where each staff member is a Da
 
 ## Changes in Fork
 * FIXED: If a new draft of a parent is saved first, and then a child object is edited after, and then finally the page is published, the child will have a LastEdited date later than the parent, making it fail to show up in History when viewing that parent version. (parent's LastEdited date is now updated in _versions on Publish) 
+* FIXED: If only child object(s) have changed, Publishing the parent page does not create a new record in the _versions table, making it impossible to revert back to this page state later. (if children have changed but not parent, we force a new version of parent to be created)
 
 ## Usage ##
 Add the PublishWithMe extension to your page (or parent DataObject):

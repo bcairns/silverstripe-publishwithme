@@ -15,6 +15,7 @@
 class PublishWithMe extends DataExtension {
 	
 	private static $publish_with_me = array();
+	private $updateDraftAfterPublish = false;
 	
 	/**
 	 * Builds an array of objects to manage
@@ -62,34 +63,52 @@ class PublishWithMe extends DataExtension {
 	 *
 	 * @return void
 	 */
-	public function onBeforeVersionedPublish($fromStage, $toStage, $createNewVersion) {
+	public function onBeforeVersionedPublish($fromStage, $toStage, &$createNewVersion) {
 
-		// for SiteTree descendants, ensure updated LastEdited field on _versions table when Publishing
-		// (otherwise child dates may be later than parent, which breaks SS's date-based versioning)
-		if( $this->owner instanceof SiteTree && !$createNewVersion ) {
+		// for SiteTree descendants, we need to handle two cases here:
+		// 1) if child objects have changed but NOT the parent, we need to force a new parent version, otherwise there
+		//    is no History entry that can be reverted to for this Publish
+		// 2) if no new version is being created (ie publishing an existing draft), we need to update LastEdited on the
+		//    _versions table, otherwise child dates may be later than parent, which breaks SS's date-based versioning
+		if ($this->owner instanceof SiteTree) {
 
-			$baseClass = ClassInfo::baseDataClass($this->owner->class);
-			$extTable = $this->owner->extendWithSuffix($baseClass);
+			// if children have changed, but not this parent object, force a new version to be written
+			if ($this->getIsModifiedOnStage(false) && !$this->owner->getIsModifiedOnStage()) {
 
-			if(is_numeric($fromStage)) {
-				$from = Versioned::get_version($baseClass, $this->owner->ID, $fromStage);
-			} else {
-				$this->owner->flushCache();
-				$from = Versioned::get_one_by_stage($baseClass, $fromStage, array(
-					"\"{$baseClass}\".\"ID\" = ?" => $this->owner->ID
-				));
-			}
-			if(!$from) {
-				user_error("Can't find {$this->owner->class}/{$this->owner->ID} in stage {$fromStage}", E_USER_WARNING);
-				return;
+				$createNewVersion = true; // this forces Versioned::publish() to create a new version
+
+				// the Draft table does not get updated to point to this newly created version
+				// so we check this flag in onAfterPublish(), and update the Draft table ourselves
+				// (otherwise Draft != Live and SS thinks there are changes to be published)
+				$this->updateDraftAfterPublish = true;
 			}
 
-			$now = SS_Datetime::now()->Rfc2822(); // from DataObject::write()
-			DB::prepared_query("UPDATE \"{$extTable}_versions\"
+			if (!$createNewVersion) {
+
+				// since we are NOT creating a new record in _versions, manually update LastEdited
+				// code adapted from Versioned::publish()
+				$baseClass = ClassInfo::baseDataClass($this->owner->class);
+				$extTable = $this->owner->extendWithSuffix($baseClass);
+				if (is_numeric($fromStage)) {
+					$from = Versioned::get_version($baseClass, $this->owner->ID, $fromStage);
+				} else {
+					$this->owner->flushCache();
+					$from = Versioned::get_one_by_stage($baseClass, $fromStage, array(
+						"\"{$baseClass}\".\"ID\" = ?" => $this->owner->ID
+					));
+				}
+				if (!$from) {
+					user_error("Can't find {$this->owner->class}/{$this->owner->ID} in stage {$fromStage}", E_USER_WARNING);
+					return;
+				}
+				$now = SS_Datetime::now()->Rfc2822(); // from DataObject::write()
+				DB::prepared_query("UPDATE \"{$extTable}_versions\"
 				SET \"LastEdited\" = ?
 				WHERE \"RecordID\" = ? AND \"Version\" = ?",
-				array($now, $from->ID, $from->Version)
-			);
+					array($now, $from->ID, $from->Version)
+				);
+
+			}
 
 		}
 
@@ -132,7 +151,13 @@ class PublishWithMe extends DataExtension {
 				}
 			}
 		}
-		
+
+		if ($this->updateDraftAfterPublish) {
+			// when we force a new version, Draft doesn't get updated. Just copy the record from Live
+			$this->updateDraftAfterPublish = false;
+			$this->owner->publish('Live','Stage');
+		}
+
 		// reset mode
 		Versioned::set_reading_mode($oldMode);
 	}
