@@ -53,7 +53,48 @@ class PublishWithMe extends DataExtension {
 		}
 		return $objects;
 	}
-	
+
+	/**
+	 * @see Versioned::publish
+	 * @param $fromStage
+	 * @param $toStage
+	 * @param $createNewVersion
+	 *
+	 * @return void
+	 */
+	public function onBeforeVersionedPublish($fromStage, $toStage, $createNewVersion) {
+
+		// for SiteTree descendants, ensure updated LastEdited field on _versions table when Publishing
+		// (otherwise child dates may be later than parent, which breaks SS's date-based versioning)
+		if( $this->owner instanceof SiteTree && !$createNewVersion ) {
+
+			$baseClass = ClassInfo::baseDataClass($this->owner->class);
+			$extTable = $this->owner->extendWithSuffix($baseClass);
+
+			if(is_numeric($fromStage)) {
+				$from = Versioned::get_version($baseClass, $this->owner->ID, $fromStage);
+			} else {
+				$this->owner->flushCache();
+				$from = Versioned::get_one_by_stage($baseClass, $fromStage, array(
+					"\"{$baseClass}\".\"ID\" = ?" => $this->owner->ID
+				));
+			}
+			if(!$from) {
+				user_error("Can't find {$this->owner->class}/{$this->owner->ID} in stage {$fromStage}", E_USER_WARNING);
+				return;
+			}
+
+			$now = SS_Datetime::now()->Rfc2822(); // from DataObject::write()
+			DB::prepared_query("UPDATE \"{$extTable}_versions\"
+				SET \"LastEdited\" = ?
+				WHERE \"RecordID\" = ? AND \"Version\" = ?",
+				array($now, $from->ID, $from->Version)
+			);
+
+		}
+
+	}
+
 	/**
 	 * @see SiteTree::doPublish
 	 * @param Page $original
