@@ -220,7 +220,7 @@ class PublishWithMe extends DataExtension {
 		$stageVersion = Versioned::get_versionnumber_by_stage($object->ClassName, 'Stage', $object->ID);
 		$liveVersion = Versioned::get_versionnumber_by_stage($object->ClassName, 'Live', $object->ID);
 		
-		return (($stageVersion && $stageVersion != $liveVersion) || (($object->hasMethod('getIsModifiedOnStage')) && $object->getIsModifiedOnStage(false)));
+		return (($stageVersion != $liveVersion) || (($object->hasMethod('getIsModifiedOnStage')) && $object->getIsModifiedOnStage(false)));
 	}
 	
 	/**

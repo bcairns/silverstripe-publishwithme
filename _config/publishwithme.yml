@@ -1,0 +1,6 @@
+---
+Name: publishwithme
+---
+GridField:
+  extensions:
+    - PublishWithMe_GridField
