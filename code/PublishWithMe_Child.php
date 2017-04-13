@@ -23,13 +23,10 @@ class PublishWithMe_Child extends DataExtension
 	 */
 	public function onBeforeDelete() {
 
+		$table = ClassInfo::table_for_object_field($this->owner->getClassName(),'Deleted');
 		$now = SS_Datetime::now()->Rfc2822(); // from DataObject::write()
 
-		// adapted from Versioned::publish()
-		$baseClass = ClassInfo::baseDataClass($this->owner->class);
-		$extTable = $this->owner->extendWithSuffix($baseClass);
-
-		DB::prepared_query("UPDATE \"{$extTable}_versions\"
+		DB::prepared_query("UPDATE \"{$table}_versions\"
 				SET \"Deleted\" = ?
 				WHERE \"RecordID\" = ? AND \"Version\" = ?",
 			array($now, $this->owner->ID, $this->owner->Version)
@@ -50,10 +47,10 @@ class PublishWithMe_Child extends DataExtension
 		}
 
 		if ($dataQuery->getQueryParam('Versioned.mode') == 'archive') {
-			$baseTable = ClassInfo::baseDataClass($dataQuery->dataClass());
+			$table = ClassInfo::table_for_object_field($this->owner->getClassName(),'Deleted');
 			$date = $dataQuery->getQueryParam('Versioned.date');
 			$query->addWhere(array(
-				"\"{$baseTable}_versions\".\"Deleted\" IS NULL OR \"{$baseTable}_versions\".\"Deleted\" > ?" => $date
+				"\"{$table}_versions\".\"Deleted\" IS NULL OR \"{$table}_versions\".\"Deleted\" > ?" => $date
 			));
 		}
 
@@ -69,16 +66,15 @@ class PublishWithMe_Child extends DataExtension
 		// we need to clear the Deleted value (on both) if it is set
 		if (!empty($this->owner->Deleted)) {
 
-			$baseClass = ClassInfo::baseDataClass($this->owner->class);
-			$extTable = $this->owner->extendWithSuffix($baseClass);
+			$table = ClassInfo::table_for_object_field($this->owner->getClassName(),'Deleted');
 
-			DB::prepared_query("UPDATE \"{$extTable}\"
+			DB::prepared_query("UPDATE \"{$table}\"
 				SET \"Deleted\" = NULL
 				WHERE \"ID\" = ?",
 				array($this->owner->ID)
 			);
 
-			DB::prepared_query("UPDATE \"{$extTable}_versions\"
+			DB::prepared_query("UPDATE \"{$table}_versions\"
 				SET \"Deleted\" = NULL
 				WHERE \"RecordID\" = ?
 				ORDER BY \"Version\" DESC
