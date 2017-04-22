@@ -238,8 +238,14 @@ class PublishWithMe extends DataExtension {
 			$baseTable = $this->owner->baseTable();	
 			$page = Versioned::get_one_by_stage($this->owner->ClassName, $version, "\"{$baseTable}\".\"ID\"={$this->owner->ID}");
 		}
-				
-		$date = $page->LastEdited;
+
+		// use stored rollback date from parent(s), otherwise use LastEdited (ie from top-level sitetree history object)
+		if( $this->owner->pageRollbackDate ){
+			$date = $this->owner->pageRollbackDate;
+		}else{
+			$date = $page->LastEdited;
+		}
+
 		$oldMode = Versioned::get_reading_mode();
 		
 		// get the current items
@@ -265,6 +271,10 @@ class PublishWithMe extends DataExtension {
 		
 		// rollback version items
 		foreach ($version_items as $field) {
+
+			// store archive date for children to use
+			$field->pageRollbackDate = $date;
+
 			$fieldVersion = is_numeric($version) ? $field->Version : 'Live';
 			if ($field->hasMethod('doDoRollBackTo')) {
 				$field->doDoRollBackTo($fieldVersion);
