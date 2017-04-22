@@ -293,6 +293,14 @@ class PublishWithMe extends DataExtension {
 		// Update state of publish button if there are unpublished changes in objects
 		if ($this->getIsModifiedOnStage(false) && ($publish = $fields->fieldByName('MajorActions.action_publish'))) {
 			$publish->addExtraClass('ss-ui-alternate');
+
+			// add "Cancel draft changes" option
+			$moreOptions = $fields->fieldByName('ActionMenus.MoreOptions');
+			$moreOptions->insertBefore(
+				FormAction::create('rollback', _t('SiteTree.BUTTONCANCELDRAFT', 'Cancel draft changes'), 'delete')
+					->setDescription(_t('SiteTree.BUTTONCANCELDRAFTDESC', 'Delete your draft and revert to the currently published page')),
+				'action_archive'
+			);
 		}
 	}
 
